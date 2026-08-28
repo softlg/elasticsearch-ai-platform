@@ -1,0 +1,14 @@
+# ===================== Elasticsearch AI 查询平台 =====================
+# Python 3.10+，安装：pip install -r requirements.txt
+# ---------------------------------------------------------------------
+fastapi==0.115.0          # Web 框架
+uvicorn[standard]==0.30.6 # ASGI 服务器
+pydantic==2.9.2           # 数据校验
+pydantic-settings==2.5.2  # .env 配置加载
+elasticsearch==8.15.1     # ES 客户端（只读查询）
+openai==1.47.0            # OpenAI 兼容大模型客户端
+requests==2.32.3          # LLM 同步请求（/responses 通道后备）
+python-dotenv==1.0.1      # 环境变量加载
+httpx==0.27.2             # HTTP 客户端
+aiosqlite==0.20.0         # SQLite 异步存储（历史记录等）
+pytest==8.3.3             # 后端单元测试

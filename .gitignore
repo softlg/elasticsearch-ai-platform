@@ -1,0 +1,31 @@
+# Secrets and local configuration
+.env
+*.env
+!.env.example
+!.env.*.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node / frontend build output
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Runtime output
+*.log
+*.pid
+boot.err
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

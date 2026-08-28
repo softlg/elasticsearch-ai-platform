@@ -1,0 +1,38 @@
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.1
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+
+  backend:
+    build: ./backend
+    env_file:
+      - ./backend/.env
+    environment:
+      ES_HOSTS: http://elasticsearch:9200
+      BACKEND_HOST: 0.0.0.0
+      BACKEND_PORT: 8000
+      CORS_ORIGINS: http://localhost:8080
+    depends_on:
+      - elasticsearch
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE: http://localhost:8000
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+volumes:
+  es-data:
