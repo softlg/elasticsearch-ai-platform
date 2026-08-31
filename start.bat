@@ -2,6 +2,9 @@
 chcp 65001 >nul
 setlocal enabledelayedexpansion
 
+rem requirements.txt 使用 UTF-8，避免中文系统默认 GBK 导致 pip 读取失败
+set PYTHONUTF8=1
+
 rem ============================================================
 rem  Elasticsearch AI 查询平台 - Windows 一键启动
 rem  首次使用：先在 backend/.env 中填入 ES 地址与 LLM_API_KEY
