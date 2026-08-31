@@ -33,7 +33,7 @@
 - ⏱️ **时间范围筛选**：左侧快捷筛选与中间时间范围自动取交集
 - 🧲 **字段过滤 + 关键字检索**：keyword 精确 / text 分词 / match_phrase 精确短语
 - 🛡️ **DSL 安全校验**：仅允许只读查询，拦截写操作与高危聚合，限定 size 与聚合深度
-- 📄 **无限滚动分页**：默认每批 50 条，触底自动加载，不卡前端
+- 📄 **日志结果展示**：默认一次返回 100 条，页面滚动仅浏览当前结果，不会自动重新生成 DSL
 - 🧠 **AI 分析**：基于查询结果输出问题归纳、根因分析、解决建议与严重程度
 - 🎯 **命中高亮**：搜索结果中关键字自动高亮
 - ⚙️ **列配置**：结果列可自由显隐、持久化到浏览器 localStorage
@@ -219,7 +219,7 @@ curl -X POST http://localhost:8000/api/query \
     "natural_language": "最近 1 小时状态码为 500 的错误日志",
     "language": "zh",
     "time_range": {"from": "2026-08-14T00:00:00Z", "to": "2026-08-14T12:00:00Z"},
-    "size": 50
+    "size": 100
   }'
 ```
 
@@ -229,13 +229,13 @@ curl -X POST http://localhost:8000/api/query \
 {
   "index": "nginx-access",
   "total": 86,
-  "executed_dsl": { "query": { "bool": { "must": [...] } }, "size": 50 },
+  "executed_dsl": { "query": { "bool": { "must": [...] } }, "size": 100 },
   "dsl_explanation": "查询最近1小时状态码为500的日志...",
   "hits": [ { "_source": { "message": "...", "status": 500 } } ],
   "took_ms": 12,
   "from": 0,
-  "size": 50,
-  "has_more": true
+  "size": 100,
+  "has_more": false
 }
 ```
 
@@ -279,14 +279,14 @@ curl -X POST http://localhost:8000/api/query \
   }'
 ```
 
-### 7. 分页加载
+### 7. API 手动分页（可选）
 
-`from` 每批递增，`has_more=false` 表示已到末尾：
+前端默认只加载首批 100 条，滚动不会再次请求。通过 API 调用时，仍可使用 `from` 和 `size` 手动分页：
 
 ```bash
 curl -X POST http://localhost:8000/api/query \
   -H "Content-Type: application/json" \
-  -d '{"index":"nginx-access", "from":50, "size":50}'
+  -d '{"index":"nginx-access", "from":100, "size":100}'
 ```
 
 ### 8. AI 分析查询结果
@@ -338,7 +338,7 @@ curl -N -X POST http://localhost:8000/api/analysis/stream \
 5. **结果区**：
    - 点击「列设置」可显隐列（持久化到本地）
    - 命中关键字自动黄色高亮
-   - 滚动到底自动加载更多；底部显示加载状态
+   - 默认展示首批 100 条结果；滚动仅浏览当前结果，不会自动重新生成 DSL
 6. **AI 分析**：点击「分析」基于当前结果生成归纳与建议；「基于分析继续提问」可追问
 
 ## 常见问题
@@ -362,8 +362,8 @@ Vite 只在启动时读取 `.env`，改完必须重启 `npm run dev`。
 ## 安全说明
 
 - 所有查询经 `es_gateway.validate_dsl` 白名单校验，仅执行只读 `search`
-- 拒绝 `delete_by_query` / `update` / `bulk` 等写操作及危险聚合
-- 默认 size 上限 `ES_MAX_SIZE`（1000），聚合嵌套 ≤ 3 层
+- 拒绝 `delete_by_query` / `update` / `bulk` 等写操作，以及 `script`、`runtime_mappings`、`script_fields`、父子关系查询等高风险 DSL
+- 默认 size 上限 `ES_MAX_SIZE`（1000），聚合嵌套 ≤ 3 层、每层最多 100 个聚合，terms/composite 等 bucket size ≤ 1000
 - 未引入登录鉴权，适用于内网/单机；如需暴露公网，请自行增加鉴权层（项目已预留扩展点）
 - 生产环境请将 `CORS_ORIGINS` 设置为实际前端域名，不要使用 `*`
 - Elasticsearch 建议使用 HTTPS 和最小权限的只读账号
