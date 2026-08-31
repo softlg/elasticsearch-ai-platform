@@ -59,7 +59,8 @@ class QueryRequest(BaseModel):
     keyword_exact: bool = False
     # 附加字段过滤
     filters: List[FilterCondition] = []
-    size: int = 50
+    # 默认一次返回 100 条，实际值仍由后端 ES_MAX_SIZE 兜底限制。
+    size: int = 100
     from_: int = Field(default=0, alias="from")
 
     model_config = {"populate_by_name": True}
@@ -78,7 +79,7 @@ class QueryResult(BaseModel):
     from_user_dsl: bool = False
     # 分页信息：本次起始位置与本批大小
     from_: int = Field(default=0, alias="from")
-    size: int = 50
+    size: int = 100
     # 是否还有更多数据（前端据此决定是否展示"加载更多"）
     has_more: bool = False
 
