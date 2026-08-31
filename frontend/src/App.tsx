@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Activity, AlertCircle, Plus, X, Settings } from "lucide-react";
 import IndexSelector from "./components/IndexSelector";
@@ -16,6 +16,7 @@ import type { QueryResult } from "./types";
 
 const MIN_WIDTH = 280;
 const LS_KEY = "ai-es-layout";
+const DEFAULT_QUERY_SIZE = 100;
 
 /**
  * 将 datetime-local 的本地时间字符串（如 "2026-08-14T10:00"）转成带时区的
@@ -80,7 +81,6 @@ interface TabState {
   resultFilters: ResultFilterState;
   result: QueryResult | null;
   loading: boolean;
-  loadingMore: boolean;
   error: string;
   liveOn: boolean;
   lastPayload: Record<string, any>;
@@ -97,7 +97,6 @@ const makeTab = (): TabState => {
     resultFilters: DEFAULT_RESULT_FILTER,
     result: null,
     loading: false,
-    loadingMore: false,
     error: "",
     liveOn: false,
     lastPayload: {},
@@ -144,6 +143,18 @@ export default function App() {
     return saved === "dark" || saved === "light" || saved === "system" ? saved : "dark";
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(() =>
+    typeof window === "undefined" ? true : window.matchMedia("(min-width: 1024px)").matches,
+  );
+
+  // 只挂载当前断点对应的布局，避免桌面/移动两套结果表同时占用内存。
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 1024px)");
+    const onChange = () => setIsDesktop(media.matches);
+    onChange();
+    media.addEventListener?.("change", onChange);
+    return () => media.removeEventListener?.("change", onChange);
+  }, []);
 
   const applyTheme = (th: "system" | "dark" | "light") => {
     const el = document.documentElement;
@@ -186,9 +197,9 @@ export default function App() {
           index: activeTab.index,
           language: i18n.language,
           time_range: mergeTimeRange(activeTab.filters, activeTab.resultFilters),
-          dsl: { query: { match_all: {} }, size: 200 },
+          dsl: { query: { match_all: {} }, size: DEFAULT_QUERY_SIZE },
         });
-        updateActive({ result: { ...data, from_user_dsl: false } });
+        updateActive({ result: { ...data, from_user_dsl: false, has_more: false } });
       } catch (e) {
         /* 轮询中的瞬时错误忽略 */
       }
@@ -216,18 +227,14 @@ export default function App() {
     return parts;
   };
 
-  const doQuery = async (payload: Record<string, any>, fromUser = false, from = 0, append = false) => {
+  const doQuery = async (payload: Record<string, any>, fromUser = false) => {
     if (!activeTab.index) {
       updateActive({ error: t("index.placeholder") });
       return;
     }
     stopLive();
-    if (append) {
-      updateActive({ loadingMore: true });
-    } else {
-      updateActive({ loading: true, error: "" });
-    }
-    if (!append && payload && (payload.natural_language || payload.dsl)) {
+    updateActive({ loading: true, error: "" });
+    if (payload && (payload.natural_language || payload.dsl)) {
       updateActive({ lastPayload: payload });
     }
 
@@ -261,43 +268,24 @@ export default function App() {
         keyword: activeTab.filters.keyword || keywordParts.join(" ") || undefined,
         keyword_exact: activeTab.filters.exact || undefined,
         filters: filterConds.length ? filterConds : undefined,
-        size: 50,
-        from,
+        size: DEFAULT_QUERY_SIZE,
+        from: 0,
       });
-      const base = activeTab.result && append ? activeTab.result : null;
-      const mergedHits = base ? [...base.hits, ...data.hits] : data.hits;
       updateActive({
         result: {
-          ...(base || {}),
           ...data,
-          hits: mergedHits,
           from_user_dsl: fromUser,
+          // 页面滚动只滚动当前 100 条结果，不再触发下一次查询。
+          has_more: false,
         },
       });
     } catch (e: any) {
       updateActive({ error: e?.response?.data?.detail || e.message || "query failed" });
       console.error(e);
     } finally {
-      updateActive({ loading: false, loadingMore: false });
+      updateActive({ loading: false });
     }
   };
-
-  // 滚动加载下一批：基于上次查询的 payload，从当前偏移量继续拉取并追加。
-  // 用 ref + useCallback 保持引用稳定，避免 ResultTable 的 onLoadMore prop
-  // 每次渲染都变化导致其内部 effect 反复重建（触发无限渲染）。
-  const doQueryRef = useRef(doQuery);
-  doQueryRef.current = doQuery;
-  const loadMoreRef = useRef<() => void>(() => {});
-  loadMoreRef.current = () => {
-    const r = activeTab.result;
-    if (!r || !r.has_more || activeTab.loadingMore) return;
-    const nextFrom = (r.from_ ?? 0) + r.hits.length;
-    const base = activeTab.lastPayload && (activeTab.lastPayload.natural_language || activeTab.lastPayload.dsl)
-      ? activeTab.lastPayload
-      : { dsl: { query: { match_all: {} } } };
-    doQueryRef.current(base, false, nextFrom, true);
-  };
-  const loadMore = useCallback(() => loadMoreRef.current(), []);
 
   // 仅用关键字直接全文检索：若已存在自然语言/DSL 查询意图则沿用，否则以 match_all 为基底由后端叠加 keyword 过滤
   const searchByKeyword = () => {
@@ -548,7 +536,7 @@ export default function App() {
       </header>
 
       {/* 三栏主内容 */}
-      <main
+      {isDesktop && <main
         ref={containerRef}
         className="pt-[110px] pb-2 px-2 flex-1 min-h-0 hidden lg:grid gap-0 overflow-hidden"
         style={gridStyle}
@@ -624,9 +612,7 @@ export default function App() {
             <ResultTable
               result={activeTab.result}
               highlightKeyword={[activeTab.filters.keyword, ...buildKeywordParts(activeTab.resultFilters)].filter(Boolean).join(" ")}
-              hasMore={activeTab.result?.has_more ?? false}
-              loadingMore={activeTab.loadingMore}
-              onLoadMore={loadMore}
+              hasMore={false}
             />
           </div>
         </section>
@@ -655,10 +641,10 @@ export default function App() {
             onToggleExpand={() => setExpandedPanel(expandedPanel === "right" ? null : "right")}
           />
         </section>
-      </main>
+      </main>}
 
       {/* 窄屏回退 */}
-      <main className="pt-[110px] px-4 py-4 flex-1 min-h-0 overflow-y-auto flex flex-col gap-4 lg:hidden">
+      {!isDesktop && <main className="pt-[110px] px-4 py-4 flex-1 min-h-0 overflow-y-auto flex flex-col gap-4">
         <div className="glass rounded-2xl p-4 flex flex-col gap-4">
           <IndexSelector value={activeTab.index} onChange={(v) => updateActive({ index: v })} />
           <FilterBar
@@ -696,15 +682,13 @@ export default function App() {
           <ResultTable
             result={activeTab.result}
             highlightKeyword={[activeTab.filters.keyword, ...buildKeywordParts(activeTab.resultFilters)].filter(Boolean).join(" ")}
-            hasMore={activeTab.result?.has_more ?? false}
-            loadingMore={activeTab.loadingMore}
-            onLoadMore={loadMore}
+            hasMore={false}
           />
         </div>
         <div className="glass rounded-2xl min-h-[300px]">
           <AnalysisPanel result={activeTab.result} />
         </div>
-      </main>
+      </main>}
 
       <footer className="h-8 flex items-center justify-center text-xs text-txt-muted">
         {t("footer.tagline")}
