@@ -15,6 +15,9 @@ from app.services.llm_provider import is_configured
 
 router = APIRouter(prefix="/api/query", tags=["query"])
 
+# 前端默认一次展示 100 条；仍受 ES_MAX_SIZE 兜底上限保护。
+DEFAULT_QUERY_SIZE = 100
+
 
 @router.post("", response_model=QueryResult)
 def run_query(req: QueryRequest):
@@ -51,10 +54,10 @@ def run_query(req: QueryRequest):
     dsl = _apply_filters(dsl, req)
 
     # size / from
-    # 默认 50（配合前端分页加载）；上限取 settings.es_max_size（.env 的 ES_MAX_SIZE，可调）。
+    # 默认一次返回 100 条；上限取 settings.es_max_size（.env 的 ES_MAX_SIZE，可调）。
     # 不做任何上限的话，size 超过 ES 的 index.max_result_window（默认 10000，from+size 之和）
     # 会直接报 400，且一次拉全量会拖垮前端渲染，因此这里必须保留一个安全上限。
-    effective_size = 50
+    effective_size = min(DEFAULT_QUERY_SIZE, settings.es_max_size)
     if req.size:
         effective_size = min(req.size, settings.es_max_size)
     # 始终以上游指定的 size 为准，覆盖任何 DSL 内自带的 size（避免 AI 生成的大 size 一次拉爆）
