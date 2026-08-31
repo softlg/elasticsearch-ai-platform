@@ -28,7 +28,7 @@ _PROMPT_ZH = """你是一个 Elasticsearch 专家。请根据用户的中文自�
 6. 不要输出任何解释文字、不要使用 markdown 代码块，直接输出 JSON。
 
 # 输出格式（严格 JSON）：
-{{"query": {{...}}, "sort": [{{...}}], "size": 50}}"""
+{{"query": {{...}}, "sort": [{{...}}], "size": 100}}"""
 
 _PROMPT_EN = """You are an Elasticsearch expert. Convert the user's English request into ONLY a valid Elasticsearch query DSL (JSON).
 
@@ -48,7 +48,7 @@ _PROMPT_EN = """You are an Elasticsearch expert. Convert the user's English requ
 6. Do NOT output any explanation or markdown code fences, just the JSON.
 
 # Output (strict JSON):
-{{"query": {{...}}, "sort": [{{...}}], "size": 50}}"""
+{{"query": {{...}}, "sort": [{{...}}], "size": 100}}"""
 
 
 def _build_fields_text(fields: List[Dict[str, str]]) -> str:
