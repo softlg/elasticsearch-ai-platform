@@ -175,6 +175,8 @@ docker compose up --build
 | `LLM_USE_RESPONSES` | 网关仅支持 `/responses` 时设 `true`（如 newapi codex channel） | `false` |
 | `BACKEND_HOST` / `BACKEND_PORT` | 后端监听地址/端口 | `0.0.0.0` / `8000` |
 | `CORS_ORIGINS` | 允许跨域来源（开发用 `*`） | `*` |
+| `MCP_TRANSPORT` | MCP 传输方式：`stdio` / `streamable-http` | `stdio` |
+| `MCP_HOST` / `MCP_PORT` | MCP HTTP 监听地址/端口 | `127.0.0.1` / `9000` |
 
 > 切换模型/供应商只需修改 `.env` 后重启后端，无需改代码。
 
@@ -183,6 +185,44 @@ docker compose up --build
 | 配置项 | 说明 |
 |---|---|
 | `VITE_API_BASE` | 后端 API 地址，如 `http://localhost:8000` |
+
+## MCP 接入其它 Agent
+
+项目提供标准 MCP Server，复用现有 Elasticsearch 查询、mapping 和 AI 分析能力。
+默认使用 stdio，适合由本机 Agent 启动：
+
+```bash
+cd backend
+python -m app.mcp_server
+```
+
+MCP 客户端配置示例：
+
+```json
+{
+  "mcpServers": {
+    "elasticsearch-ai-platform": {
+      "command": "python",
+      "args": ["-m", "app.mcp_server"],
+      "cwd": "F:/code/ai/elasticsearch-ai-platform/backend"
+    }
+  }
+}
+```
+
+远程 Agent 可使用 Streamable HTTP（默认路径 `/mcp`）：
+
+```bash
+cd backend
+python -m app.mcp_server --transport streamable-http
+```
+
+默认只监听 `127.0.0.1:9000`；需要对外提供服务时，请先设置 `MCP_HOST=0.0.0.0`、
+`MCP_PORT=9000`，并在反向代理中配置 HTTPS 和鉴权。
+
+提供的 MCP 工具包括 `list_es_indices`、`get_index_mapping`、`search_logs`、
+`analyze_log_samples` 和 `ask_about_log_samples`。远程部署时请在反向代理增加 HTTPS、
+Bearer/OAuth 鉴权、限流和租户隔离；MCP Server 不会绕过 DSL 安全校验。
 
 ## API 使用实例
 
@@ -396,3 +436,4 @@ npm run build
 本项目采用 [MIT License](LICENSE) 开源。Elasticsearch、OpenAI 兼容模型服务以及前端/后端依赖分别遵循其各自的许可证；本项目不代表 Elastic、OpenAI 或任何模型供应商。
 
 维护者：[@softlg](https://github.com/softlg)
+
